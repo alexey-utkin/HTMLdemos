@@ -1,0 +1,307 @@
+﻿<html>
+<!--
+author: Alexey Utkin
+email:  alexey.utkin@gmail.com
+-->
+<head>
+<title>My God, it's full of stars!</title>
+<script type="text/javascript">
+
+var ctx;
+var pixels;
+
+var w;
+var h;
+var fps = 100;
+
+var maxQ = 1;
+var maxRadius = 2;
+var ptAmplifier = 256 * 2 / maxQ;
+var cBody = 100;
+var scalePwr = 0;
+var scaleValue = 1;
+
+//thanks to Andrea Giammarchi
+var Vector = (
+    function () {
+        function Vector(length) {
+            if (arguments.length === 1 && typeof length === "number") {
+                this.length = -1 < length && length === length << 1 >> 1 ? length : this.push(length);
+            }
+            else if (arguments.length) {
+                this.push.apply(this, arguments);
+            }
+        };
+
+        function Array() { };
+        Array.prototype = [];
+
+        Vector.prototype = new Array;
+        Vector.prototype.length = 0;
+        Vector.prototype.clear = function () {
+            for (var i = 0; i < this.length; ++i) {
+                this[i] = 0.0;
+            }
+        }
+        Vector.prototype.cloneV = function () {
+            var ret = new Vector(this.length);
+            for (var i = 0; i < this.length; ++i) {
+                ret[i] = this[i];
+            }
+            return ret;
+        }
+        Vector.prototype.smul = function (y) {
+            var s = 0.0;
+            for (var i = 0; i < this.length; ++i) {
+                s += this[i] * y[i];
+            }
+            return s;
+        }
+        Vector.prototype.add = function (y) {
+            for (var i = 0; i < this.length; ++i) {
+                this[i] += y[i];
+            }
+        }
+        Vector.prototype.sub = function (y) {
+            for (var i = 0; i < this.length; ++i) {
+                this[i] -= y[i];
+            }
+        }
+        Vector.prototype.cmul = function (c) {
+            var ret = new Vector(this.length);
+            for (var i = 0; i < this.length; ++i) {
+                ret[i] = c * this[i];
+            }
+            return ret;
+        }
+
+        Vector.prototype.mod2 = function () {
+            return this.smul(this);
+        }
+        Vector.prototype.mod = function () {
+            return Math.sqrt(this.mod2());
+        }
+        Vector.prototype.toString = function () {
+            var s = "Vector[";
+            for (var i = 0; i < this.length; ++i) {
+                if (i)
+                    s += " ";
+                s += i + ":" + this[i];
+            }
+            return s + "]";
+        }
+
+        Vector.prototype.constructor = Vector;
+        return Vector;
+    }
+)();
+
+var radiusC = (Math.exp(maxRadius) - 1) / maxQ;
+var Body = (
+   function () {
+        Body.prototype.toString = function () {
+            return "Body[\n R:" + this.R + "\n V:" + this.V + "\n Q:" + this.Q + "\n]";
+        };
+        function Body() {
+            this.R = new Vector(3);
+            this.V = new Vector(3);
+            this.Q = 0;
+        }
+        Body.prototype.sr = function () {
+            return Math.log(1 + radiusC * this.Q);
+        };
+        return Body;
+   }
+)();
+
+var limits;
+
+function init() {
+    var el = document.getElementById('game');
+    w = el.width;
+    h = el.height;
+    limits = [w, h, h];
+
+    ctx = el.getContext('2d');
+    ctx.translate(w / 2, h / 2);
+    pixels = ctx.createImageData(w, h);
+
+    for (var i = 0; i < w*h; ++i) {
+        pixels.data[i*4 + 3] = 255;
+    }
+
+    initModel();
+
+    setInterval(clock, 1000 / fps);
+};
+
+function clock() {
+    renderScene();
+    ctx.putImageData(pixels, 0, 0);
+    renderModel();
+};
+
+var arBody = new Array(cBody);
+var arF = new Array(cBody);
+var mbody;
+
+
+function initModel() {
+    mbody = new Body();
+    mbody.R.clear();
+    mbody.V.clear();
+
+    for (var i = 0; i < cBody; ++i) {
+        var body = new Body();
+
+        body.Q = maxQ * Math.exp(Math.random() - 1.0);
+        body.R = new Vector(3);
+        body.V = new Vector(3);
+        for (var j = 0; j < body.R.length; ++j) {
+            body.R[j] = limits[j] * (Math.random() - 0.5);
+            body.V[j] = 0;
+        }
+
+        mbody.Q += body.Q;
+        mbody.R.add(body.R.cmul(body.Q));
+        mbody.V.add(body.V.cmul(body.Q));
+
+        arBody[i] = body;
+        arF[i] = new Vector(3);
+    }
+
+    mbody.R = mbody.R.cmul(1.0 / mbody.Q);
+    mbody.V = mbody.V.cmul(1.0 / mbody.Q);
+    moveSystem();
+}
+
+function doModel() {
+    for (var i = 0; i < cBody; ++i) {
+        arBody[i].R.add(arBody[i].V);
+        arF[i].clear();
+    }
+    for (var i = 0; i < cBody; ++i) if (arBody[i].Q != 0) {
+        for (var k = 0; k < i; ++k) if (arBody[k].Q != 0) {
+            var body_i = arBody[i];
+            var body_k = arBody[k];
+
+            var d = body_k.R.cloneV();
+            d.sub(body_i.R);
+
+            var r2 = d.mod2();
+
+            var r = Math.sqrt(r2);
+            var n = d.cmul(1.0 / r);
+
+            if (r < body_i.sr() + body_k.sr()) {
+                var m = body_i.Q;
+                var M = body_k.Q;
+                if (Math.random() > 0.5) {
+                    //Elastic collision
+                    var un_ss = body_i.V.smul(n);
+                    var Un_ss = body_k.V.smul(n);
+
+                    var vn_ss = (un_ss * (m - M) + 2 * M * Un_ss) / (m + M);
+                    var Vn_ss = (Un_ss * (M - m) + 2 * m * un_ss) / (m + M);
+
+                    body_i.V.add(n.cmul(vn_ss - un_ss));
+                    body_k.V.add(n.cmul(Vn_ss - Un_ss));
+                } else {
+                    //Inelastic collision
+                    var mV_i = body_i.V.cmul(body_i.Q);
+                    var mV_k = body_k.V.cmul(body_k.Q);
+                    mV_i.add(mV_k);
+
+                    var mR_i = body_i.R.cmul(body_i.Q);
+                    var mR_k = body_k.R.cmul(body_k.Q);
+                    mR_i.add(mR_k);
+
+                    body_i.Q += body_k.Q;
+                    body_i.V = mV_i.cmul(1./body_i.Q);
+                    body_i.R = mR_i.cmul(1./body_i.Q);
+
+                    body_k.Q = 0;
+                    body_k.V.clear();
+                }
+            } else {
+                arF[i].add(n.cmul(  body_k.Q / r2));
+                arF[k].add(n.cmul(- body_i.Q / r2));
+            }
+        }
+    }
+    for (var i = 0; i < cBody; ++i) {
+        arBody[i].V.add(arF[i]);
+    }
+}
+
+function renderScene() {
+    doModel();
+}
+
+var radiusB = (Math.exp(150) - 1) / (maxQ * cBody);
+function br(q) {
+    return Math.round(Math.log(1 + radiusB * q));
+}
+
+function renderModel() {
+    mbody.R.clear();
+    mbody.V.clear();
+    for (var i = 0; i < cBody; ++i) if (arBody[i].Q != 0) {
+        var body = arBody[i];
+        mbody.R.add(body.R.cmul(body.Q));
+        mbody.V.add(body.V.cmul(body.Q));
+
+        ctx.beginPath();
+        ctx.arc(body.R[0], body.R[1], body.sr(), 0, 2 * Math.PI, false);
+        var r = Math.round((body.R[2] / h + 0.5) * 255.0);
+        var b = br(body.Q);
+        var g = Math.round(body.Q / maxQ * 255.0);
+        ctx.fillStyle = "rgb(" + r +" ," + g + "," + b + ")";
+        ctx.fill();
+        ctx.lineWidth = 0.1;
+        ctx.stroke();
+    }
+    mbody.R = mbody.R.cmul(1.0 / mbody.Q);
+    mbody.V = mbody.V.cmul(1.0 / mbody.Q);
+
+    ctx.fillStyle = "#0000FF";
+    ctx.fillRect(mbody.R[0] - 2, mbody.R[1] - 2, 4, 4);
+
+    moveSystem();
+}
+
+
+function moveSystem() {
+    for (var i = 0; i < cBody; ++i) if (arBody[i].Q != 0) {
+        var body = arBody[i];
+        body.R.sub(mbody.R);
+        body.V.sub(mbody.V);
+        for (var j = 0; j < body.R.length; ++j) {
+            if ((body.R[j] < -limits[j] / 2 && body.V[j] < 0.0) || (body.R[j] > limits[j] / 2 && body.V[j] > 0.0))
+                body.V[j] *= -1.0;
+        }
+    }
+}
+
+</script>
+
+    <style type="text/css">
+    canvas {
+        image-rendering: optimizeSpeed;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: optimize-contrast;
+        -ms-interpolation-mode: nearest-neighbor;
+        width:400px;
+        height:400px;
+    }
+    </style>
+</head>
+    
+<body>
+    <canvas id="game" width="400" height="400" onkeydown="move"></canvas>
+    <script type="text/javascript">init();</script>
+</body>
+</body>
+
+</html>

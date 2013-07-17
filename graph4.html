@@ -1,0 +1,197 @@
+﻿<html>
+<!--     
+author: Alexey Utkin
+email:  alexey.utkin@gmail.com
+-->
+<head>
+<title>My God, it's full of stars!</title>
+<script type="text/javascript">
+var el;    
+var ctx;
+var pixels;
+
+var w;
+var h;
+var fps = 100;
+var maxQ = 10;
+var maxMassQ = 2;
+var cBody = 25;
+
+function init() {
+    el = document.getElementById('game');
+    w = el.width;
+    h = el.height;
+    ctx = el.getContext('2d');
+    pixels = ctx.createImageData(w, h);
+
+    for ( var i = 0; i < w*h; ++i) {
+        pixels.data[i*4 + 3] = 255;
+    }
+
+    initModel();
+
+    setInterval(clock, 1000 / fps);
+};
+
+function clock() {
+    renderScene();
+    ctx.putImageData(pixels, 0, 0);
+    renderModel();
+};
+
+
+var arFX = new Array(cBody);
+var arFY = new Array(cBody);
+var arVX = new Array(cBody);
+var arVY = new Array(cBody);
+var arX = new Array(cBody);
+var arY = new Array(cBody);
+var arQ = new Array(cBody);
+var M = 0;
+
+function initModel() {    
+    for (var i = 0; i < cBody; ++i) {
+        arQ[i] = 1 + Math.random() * (maxQ - 1);
+        M += arQ[i];
+        arX[i] = w * Math.random();
+        arY[i] = h * Math.random();
+        arVX[i] = Math.random() * w / (5 * fps);
+        arVY[i] = Math.random() * h / (5 * fps);
+    }
+}
+
+function ss(x1, y1, x2, y2) {        
+    return x1*x2 + y1*y2;
+}
+
+function modul(x, y) {
+    return Math.sqrt(x*x + y*y);
+}
+
+
+function doModel() {
+    for (var i = 0; i < cBody; ++i) {
+        arX[i] += arVX[i];
+        arY[i] += arVY[i];
+        
+        if (arX[i] < 0 || arX[i] > w)
+            arVX[i] *= -1;
+        if (arY[i] < 0 || arY[i] > h)
+            arVY[i] *= -1;
+            
+        arFX[i] = 0;
+        arFY[i] = 0;
+    }
+    for (var i = 0; i < cBody; ++i) {
+        for (var k = 0; k < i; ++k) {
+            var dx = arX[k] - arX[i];
+            var dy = arY[k] - arY[i];
+            var r2 = (dx * dx + dy * dy);
+            var r = Math.sqrt(r2);
+            if (r < (arQ[i] + arQ[k])/maxMassQ) {
+                //Time machine -2 dt
+                var dox = dx - (arVX[k] - arVX[i]) * 2;
+                var doy = dy - (arVY[k] - arVY[i]) * 2;
+                var orm = modul(dox, doy);
+                
+                //Ellastic collision
+                var nx = dox/orm;
+                var ny = doy/orm;
+                
+                var un_ss = ss(arVX[i], arVY[i], nx, ny);
+                var m = arQ[i];
+
+                var Un_ss = ss(arVX[k], arVY[k], nx, ny);
+                var M = arQ[k];
+                
+                var vn_ss = (un_ss*(m - M) + 2*M*Un_ss)/(m + M);
+                var Vn_ss = (Un_ss*(M - m) + 2*m*un_ss)/(m + M);
+
+                arVX[i] += (vn_ss - un_ss)*nx;
+                arVY[i] += (vn_ss - un_ss)*ny;
+                arVX[k] += (Vn_ss - Un_ss)*nx;
+                arVY[k] += (Vn_ss - Un_ss)*ny;
+            } else {
+                var nx = dx / r;
+                var ny = dy / r;
+                var F = arQ[k] / r2;
+                arFX[i] += F * nx;
+                arFY[i] += F * ny;
+                F = arQ[i] / r2;
+                arFX[k] -= F * nx;
+                arFY[k] -= F * ny;
+            }
+        }
+    }
+    for (var i = 0; i < cBody; ++i) {
+        arVX[i] += arFX[i];
+        arVY[i] += arFY[i];
+    }
+}
+
+function FF(x, y) {
+    var F = 0.0;
+    for (var i = 0; i < cBody; ++i) {
+        if (x == arX[i] || y == arY[i])
+            return arQ[i];
+        var r = modul(x - arX[i], y - arY[i]);
+        F += arQ[i] / r;
+    }
+    return F;
+}
+
+function renderScene() {
+    doModel();
+    for (var x = 0; x < w; ++x) {
+        for (var y = 0; y < h; ++y) {
+            var F = 65*FF(x, y);
+            var off = (x + y * w) * 4;            
+            pixels.data[off + 0] = F;
+            //pixels.data[off + 1] = 0;
+            //pixels.data[off + 2] = 0;
+        }
+    }
+}
+
+function renderModel() {
+    var mX = 0;
+    var mY = 0;
+  
+    for (var i = 0; i < cBody; ++i) {
+        mX += arQ[i] * arX[i];
+        mY += arQ[i] * arY[i];
+        
+        ctx.beginPath();
+        ctx.arc(arX[i], arY[i], arQ[i]/maxMassQ, 0, 2*Math.PI, false);
+        ctx.fillStyle = "rgb(0, 200," + Math.round(arQ[i]*255/maxQ) + ")";
+        ctx.fill();
+        ctx.lineWidth = 0.01;
+        ctx.stroke();        
+    }
+    
+    mX /= M;
+    mY /= M;
+    ctx.fillStyle = "#0000FF";
+    ctx.fillRect(mX - 2, mY - 2, 4, 4);
+}
+
+</script>
+
+<style type="text/css">
+    canvas, img {
+        image-rendering: optimizeSpeed;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: optimize-contrast;
+        -ms-interpolation-mode: nearest-neighbor;
+    }
+</style>
+
+</head>
+
+<body>
+<canvas id="game" width="300" height="300"></canvas>
+<script type="text/javascript">init();</script>
+</body>
+
+</html>
