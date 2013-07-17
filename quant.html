@@ -1,0 +1,241 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=windows-1251">
+<title>1D quantum well</title>
+<script>
+//https://developer.mozilla.org/en/Canvas_tutorial
+
+var  gc_iNodeCount = 3000,
+     gc_iWFCount   = 10,
+     gc_Me         = 9.1093897e-31,//kg
+     gc_H          = 1.05457266e-34, //J*s
+     gc_Q          = 1.60217733e-19; //C=Kl
+
+var
+  g_arU = [], // tabbed U [V]
+  g_arX = [], // tabbed X [m]
+  g_WF = [],  // tabbed test wave function (x) [J]
+  g_XStep,    // X axis step [m]
+  g_dE,       // Energy axis step [J]
+  g_Width,    // gap width [m]
+  g_Deep,     // gap deep [V]
+  g_arWF = [],  // solution array for wave functions 
+  g_arE = [],     // solution array for energies
+  g_iWFCount; // the number of solutions
+
+function minmax(ar,  bounds)
+{
+    bounds.min = ar[0];
+    bounds.max = ar[0];
+    for(var i = 0; i < ar.length; ++i) {
+        if (ar[i] < bounds.min)
+            bounds.min = ar[i];
+        if (ar[i] > bounds.max)
+            bounds.max = ar[i];
+    }
+}
+
+function getColorFromIndex(index)
+{
+    return "rgb(" 
+       + (0x7F * ((index & 0x01))) + ","
+       + (0x7F * ((index & 0x02)>>1 )) + ","
+       + (0x7F * ((index & 0x04)>>2 )) + ")";
+}
+
+function  drawU(canvas)
+{
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "rgb(250,250,250)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  var boundsX = { min: 0.0, max: 0.0 };
+  minmax(g_arX, boundsX);
+
+  var boundsY = {min : 0.0, max: 0.0};
+  minmax(g_arU, boundsY);
+
+  var AX = (1.0*canvas.width - 10.0)/(boundsX.max - boundsX.min);
+  var BX = -AX*boundsX.min + 5.;
+  var AY = -(1.0*canvas.height  - 10.0)/(boundsY.max - boundsY.min);
+  var BY = -AY*boundsY.max + 5.;
+
+  //draw graph
+  //ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgb(0,0,255)";
+  ctx.beginPath();
+  ctx.moveTo( Math.round(AX*g_arX[0] + BX), Math.round(AY*g_arU[0] + BY));
+  for (var i = 0; i < gc_iNodeCount; ++i) {
+    ctx.lineTo( Math.round(AX*g_arX[i] + BX), Math.round(AY*g_arU[i] + BY) );
+  }
+  ctx.stroke();
+
+  for (var k = 0; k < g_iWFCount; ++k) {
+    ctx.strokeStyle = getColorFromIndex(k);
+    ctx.beginPath();
+    ctx.moveTo( Math.round(AX*0.0 + BX), Math.round(AY*g_arE[k] + BY));
+    ctx.lineTo( Math.round(AX*g_Width + BX), Math.round(AY*g_arE[k] + BY) );
+    ctx.stroke();
+  }
+}
+
+var PrevWF0;
+
+function CalcWF(E, bFirst)
+{
+  for (var i = gc_iNodeCount-1; 0 <= i; --i) {
+    g_WF[i] = g_arX[i] > g_Width
+       ? Math.exp(-Math.sqrt(2.0*gc_Me*(-E))*g_arX[i]/gc_H)
+       : g_WF[i+1]*( 2.0*gc_Me*(g_arU[i+1]-E)*g_XStep*g_XStep/(gc_H*gc_H) + 2.0 ) - g_WF[i+2] ;
+  }
+  var ret = (bFirst)
+    ? false
+    : (PrevWF0*g_WF[0] < 0);
+  PrevWF0 = g_WF[0];
+  
+  return ret;
+}
+
+function normWF()
+{
+  var S = 0.0;
+  for (var i = 0; i < gc_iNodeCount; ++i)
+    S += g_WF[i]*g_WF[i];
+
+  S = Math.sqrt(S*g_XStep);
+
+  for (var i = 0; i < gc_iNodeCount; ++i)
+    g_WF[i] /= S;
+}
+
+function drawWF(canvas)
+{
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "rgb(250,250,250)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  var boundsY = {min : 0.0, max: 0.0};
+  for (var i = 0; i < g_iWFCount; ++i) {
+    if (i==0) 
+        minmax(g_arWF[i], boundsY);
+    else {
+        var boundsT = {min : 0.0, max: 0.0};
+        minmax(g_arWF[i], boundsT);
+        if (boundsT.min < boundsY.min)
+            boundsY.min = boundsT.min;
+        if (boundsT.max > boundsY.max)
+            boundsY.max = boundsT.max;
+    }
+  }
+
+  var boundsX = {min : 0.0, max: 0.0};
+  minmax(g_arX, boundsX);
+
+  var AX = (canvas.width - 10.0)/(boundsX.max - boundsX.min);
+  var BX = -AX*boundsX.min + 5.;
+  var AY = -(canvas.height - 10.)/(boundsY.max - boundsY.min);
+  var BY = -AY*boundsY.max + 5.;
+
+  for (var k = 0; k < g_iWFCount; ++k) {
+    ctx.beginPath();
+    ctx.strokeStyle = getColorFromIndex(k);
+    ctx.moveTo(Math.round(AX*g_arX[0] + BX), Math.round(AY*g_arWF[k][0] + BY));
+    for ( var i = 0; i < gc_iNodeCount; ++i)
+      ctx.lineTo(Math.round(AX*g_arX[i] + BX), Math.round(AY*g_arWF[k][i] + BY));
+    ctx.stroke();
+  }
+}
+
+function initU()
+{
+    g_XStep = 3*g_Width/gc_iNodeCount;
+    for(var i = 0; i < gc_iNodeCount; ++i) {
+        g_arX[i] = g_XStep*i;
+        //    |/ -like
+        if (g_arX[i] < g_Width/2)
+          g_arU[i] = -g_Deep * 2 * g_arX[i]/g_Width
+        else if (g_arX[i] < g_Width)
+          g_arU[i] = -g_Deep * 2 + g_Deep * 2/g_Width * g_arX[i]
+        else
+          g_arU[i] = 0;
+
+        // _| step-like
+        /*
+        if (g_arX[i] < g_Width)
+            g_arU[i] = -g_Deep
+        else
+            g_arU[i] = 0;
+        */
+    }
+}
+
+function  doJob()
+{
+  g_Width = parseFloat(document.getElementById('edWidth').value) * 1e-10; //A->m
+  g_Deep = parseFloat(document.getElementById('edDeep').value) * gc_Q; //V->J
+  g_dE = parseFloat(document.getElementById('edAccuracy').value) * gc_Q; //V->J
+
+  var iEStepCount = Math.round(g_Deep / g_dE);
+  g_iWFCount = 0;
+
+  initU();
+  drawU(document.getElementById('imU'));
+
+  for (var i = 0; i < iEStepCount && g_iWFCount < gc_iWFCount; ++i) {
+    var E = -g_Deep + g_dE*i;
+    if ( CalcWF(E, i==0) ) {
+        normWF();
+        g_arWF[g_iWFCount] = g_WF.slice();
+        g_arE[g_iWFCount] = E;
+        ++g_iWFCount;
+    }
+  }
+  drawU(document.getElementById('imU'));
+  drawWF(document.getElementById('imWF'));
+}
+
+</script></head>
+<body>
+    <h1> 1D quantum well </h1>
+    <table>
+    <tbody><tr>
+        <td>
+            <canvas width="200" height="200" id="imU"></canvas>
+        </td>
+        <td>
+        <table>
+          <tbody><tr>	
+                 <td>
+              <label>Width</label>
+             </td><td>
+                    <input id="edWidth" value="5.0" type="edit">
+                 </td><td>
+                    A
+                 </td>  
+              </tr><tr>	
+                 <td>
+              <label>Deep</label>
+             </td><td>
+                    <input id="edDeep" value="10.0" type="edit">
+                 </td><td>
+                    eV
+                 </td>  
+              </tr><tr>	
+                 <td>
+              <label>Accuracy</label>
+             </td><td>
+                    <input id="edAccuracy" value="0.001" type="edit">
+                 </td><td>
+                    eV
+                 </td>  
+              </tr>
+        </tbody></table>
+            <button onclick="doJob();">Do it!</button>
+        </td>
+        <td>
+            <canvas width="200" height="200" id="imWF"></canvas>
+        </td>
+    </tr>
+    </tbody></table>
+</body></html>
