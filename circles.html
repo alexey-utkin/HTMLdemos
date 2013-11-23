@@ -1,8 +1,10 @@
 <html>
 <head>
-<script>
+<script type="text/javascript">
+<!--
         // https://github.com/mrdoob/three.js/wiki/How-to-run-things-locally
         // https://github.com/cmisenas/canny-edge-detection
+        // http://ru.wikipedia.org/wiki/%D0%94%D0%B8%D1%84%D1%84%D0%B5%D1%80%D0%B5%D0%BD%D1%86%D0%B8%D0%B0%D0%BB%D1%8C%D0%BD%D0%B0%D1%8F_%D0%B3%D0%B5%D0%BE%D0%BC%D0%B5%D1%82%D1%80%D0%B8%D1%8F_%D0%BA%D1%80%D0%B8%D0%B2%D1%8B%D1%85
 
         // { Canvas
         function Canvas(id, w, h, res) {
@@ -179,8 +181,8 @@
                     [-1, 0, 1]];
                 //perform horizontal convolution
                 var yfilter =
-                   [[1, 2, 1],
-                    [0, 0, 0],
+                   [[1,   2,  1],
+                    [0,   0,  0],
                     [-1, -2, -1]];
 
                 console.time('Sobel Filter Time');
@@ -406,92 +408,21 @@
         }
         // } Canny
 
-        function getCircle(x, y, n, canvas) {
-           var N = n;
-           var s = {x:0, y:0, r:1};
-           for (var i = 0;  i < N; ++i) {          
-              s.x += x[i];
-              s.y += y[i];
-           }
-           s.x /= N;
-           s.y /= N;
-           var err = 1e10;
-           for(var u = 0; u < 400; ++u) {
-             var A = [[0,0,0], [0,0,0], [0,0,0]];
-             var b = [0,0,0];
-             for (var i = 0;  i < N; ++i) {
-                var xi = x[i], yi = y[i];
-                var dx = xi - s.x, dy = yi - s.y;
-                var dx2 = dx*dx, dy2 = dy*dy, dxdy = dx * dy;
-                var R = Math.sqrt(dx2 + dy2);
-                if (R == 0) R = 1;
-                var R2 = R*R;
-                var rR = s.r/R, dxR = dx/R, dyR = dy/R;
-                var rR3 = rR/R2;
-                A[0][0] += rR3*dx2 - rR + 1; A[0][1] += rR3*dxdy;         A[0][2] += dxR;
-              /*A[1][0] = A[0][1];*/         A[1][1] += rR3*dy2 - rR + 1; A[1][2] += dyR;
-              /*A[2][0] = A[0][2];*/       /*A[2][1] = A[1][2];*/       /*A[1][2] += 1;*/
-                b[0] = (1 - rR) * dx;
-                b[1] = (1 - rR) * dy;
-                b[2] = R - s.r;
-             }
-             A[1][0] = A[0][1]; A[2][0] = A[0][2]; A[2][1] = A[1][2]; A[2][2] = N;
-
-             var  determinant = +A[0][0]*[A[1][1]*A[2][2]-A[2][1]*A[1][2]]
-                                -A[0][1]*[A[1][0]*A[2][2]-A[1][2]*A[2][0]]
-                                +A[0][2]*[A[1][0]*A[2][1]-A[1][1]*A[2][0]];
-             var invdet = 1/determinant;
-
-             // invert transponed
-             var r = [[0,0,0], [0,0,0], [0,0,0]];
-             r[0][0] =  (A[1][1]*A[2][2]-A[2][1]*A[1][2])*invdet;
-             r[1][0] = -(A[0][1]*A[2][2]-A[0][2]*A[2][1])*invdet;
-             r[2][0] =  (A[0][1]*A[1][2]-A[0][2]*A[1][1])*invdet;
-             r[0][1] = -(A[1][0]*A[2][2]-A[1][2]*A[2][0])*invdet;
-             r[1][1] =  (A[0][0]*A[2][2]-A[0][2]*A[2][0])*invdet;
-             r[2][1] = -(A[0][0]*A[1][2]-A[1][0]*A[0][2])*invdet;
-             r[0][2] =  (A[1][0]*A[2][1]-A[2][0]*A[1][1])*invdet;
-             r[1][2] = -(A[0][0]*A[2][1]-A[2][0]*A[0][1])*invdet;
-             r[2][2] =  (A[0][0]*A[1][1]-A[1][0]*A[0][1])*invdet;
-
-             var d = [
-               r[0][0] * b[0] + r[0][1] * b[1] + r[0][2] * b[2],
-               r[1][0] * b[0] + r[1][1] * b[1] + r[1][2] * b[2],
-               r[2][0] * b[0] + r[2][1] * b[1] + r[2][2] * b[2],
-             ];
-             var newErr = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
-             var scale  = 1;
-             s.x += d[1];
-             if (s.x < 0 || s.x > canvas.width) break;
-             s.y += d[0];
-             if (s.y < 0 || s.y > canvas.height) break;
-             s.r += d[2];
-             if (s.r < 0 || s.r > canvas.height/2 || s.r > canvas.width/2) break;
-             if (u > 10 && newErr > err)
-                break;
-             err = newErr;    
-           }
-           if (s.r < 0) s.r = 1;
-           console.log('x:' + s.x + ' y:' + s.y + ' r:' + s.r);
-           return s;
-        }
-
-        function getSD(x, y, n, Nmin) {
-	   var N = Nmin/3;
-           var off1 = n - N*3;
-           var off2 = n - N*2;
-           var off3 = n - N;
-           var x1 = 0, x2 = 0, x3 = 0; 
-           var y1 = 0, y2 = 0, y3 = 0;
-           for (var i = 0; i < N; ++i) {
-             x1 += x[off1 + i]; y1 += y[off1 + i];
-             x2 += x[off2 + i]; y2 += y[off2 + i];
-             x3 += x[off3 + i]; y3 += y[off3 + i];
-           }
-           x1 /= N; x2 /= N;  x3 /= N;
-           y1 /= N; y2 /= N;  y3 /= N;
-           if (x2 == x1 || x3 == x2 || x3 == x1) return 10000;
-           return 2*((y3 - y2)/(x3 - x2) - (y2 - y1)/(x2 - x1))/(x3 - x1);
+        function createFragments(offsetEdges, width) {
+            var edges = new Array(offsetEdges.length);
+            var lineSize = width*4;
+            for(var i = 0; i < offsetEdges.length; ++i){
+                var offsetEdge = offsetEdges[i];
+                var arX = new Array(offsetEdge.length);
+                var arY = new Array(offsetEdge.length);
+                for(var k = 0; k < offsetEdge.length; ++k) {
+                  var pos = offsetEdge[k];
+                  arX[k] = (pos % lineSize) / 4;
+                  arY[k] = ~~(pos / lineSize);
+                }
+                edges[i] = {x:arX, y:arY, length:offsetEdge.length};
+            }
+            return edges;
         }
 
         function init() {
@@ -503,83 +434,31 @@
                 var newImgData = canny.nonMaximumSuppress(canny.sobel(currentImgData));
 
                 newImgData = canny.hysteresis(newImgData, parseInt(document.getElementById("d").value))();
-                //canvas.ctx.putImageData(newImgData, 0, 0);
 
-                var al = canny.getAllEdges(newImgData);
-                var r = 2;
-                var wightLimitLow = (r + 1) ; //cross only!
-                var wightLimitUp = wightLimitLow * 2; //cross only!
-                var Nmax = 100;
-                var Nmin = 3*9;
-                var SD_DIV = 0.7;
-                var _x = new Array(Nmax);
-                var _y = new Array(Nmax);
-                var lineSize = canvas.width*4;
-                for(var i = 0; i < al.length; ++i){
-                    var adge = al[i];
-                    var color = {r:Math.random()*255, g:Math.random()*255, b:Math.random()*255};
+                var edges = createFragments(canny.getAllEdges(newImgData), canvas.width);
+
+                for(var i = 0; i < edges.length; ++i){
+                    var edge = edges[i];
                     canvas.ctx.strokeStyle = "rgb("
                       + (~~(Math.random()*255)) + ","
                       + (~~(Math.random()*255)) + ","
                       + (~~(Math.random()*255)) + ")";
-
-                    var n = 0;
-                    var sdOld = 0;
-                    for(var k = 0; k < adge.length; ++k) {
-                          var pos = adge[k];
-                          _x[n] = (pos % lineSize) / 4;
-                          _y[n] = ~~(pos / lineSize);
-                          ++n;
-                          var sdDiv;
-                          if (n < Nmin) {
-                            sdDiv = 0;
-                          } else if (n == Nmin) {
-                            var sd = getSD(_x, _y, n, Nmin);
-                            sdOld = sd * n;
-                            sdDiv = 0;
-                          } else { // n > Nmin
-                            var sd = getSD(_x, _y, n, Nmin);
-
-                            var sdM = (sdOld + sd)/n;
-                            var sdMold = sdOld/(n - 1);
-                            sdDiv = (sdM - sdMold)/sdM;
-                            if (sdDiv < 0) sdDiv = -sdDiv;
-
-                            sdOld += sd;
-                          }
-                          canvas.ctx.beginPath();
-                          canvas.ctx.moveTo(_x[n],_y[n]);
-                          canvas.ctx.lineTo(_x[n]+1,_y[n]+1);
-                          canvas.ctx.stroke();
-                          if (n >= Nmax || sdDiv >= SD_DIV) {
-                             // find the circle
-                             var circle = getCircle(_x, _y, n, canvas);
-                             if (circle && circle.r > 5 && circle.r < 50) {
-                                canvas.ctx.beginPath();
-                                canvas.ctx.arc(circle.x, circle.y, circle.r, 0, 2*Math.PI);
-                                canvas.ctx.stroke();
-                             }
-                             color = {r:Math.random()*255, g:Math.random()*255, b:Math.random()*255};
-                             canvas.ctx.strokeStyle = "rgb("
-                              + (~~(Math.random()*255)) + ","
-                              + (~~(Math.random()*255)) + ","
-                              + (~~(Math.random()*255)) + ")";
-                             n = 0;
-                             sdOld = 0;  
-                          }
-                          //canvas.setPixel(pos, color, newImgData);
-                          //canvas.ctx.strokeStyle = "#00ff00";
+                    canvas.ctx.beginPath();
+                    canvas.ctx.moveTo(edge.x[0], edge.y[0]);
+                    for(var k = 1; k < edge.length; ++k) {
+                      canvas.ctx.lineTo(edge.x[k], edge.y[k]);
                     }
+                    canvas.ctx.stroke();
                 }
                 //canvas.ctx.putImageData(newImgData, 0, 0);
             };
         }
-
+-->
 </script>
 </head>
 <body onload="init();">
 <canvas id="image">
 </canvas>
-<input id="d" type="edit" value="90"/><button onclick="init()">Redraw</button>
+<input id="d" type="number" value="90"/><button onclick="init()">Redraw</button>
 </body>
 </html>
