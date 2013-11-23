@@ -425,6 +425,40 @@
             return edges;
         }
 
+        function smoothFragments(edges, r) {
+            var sedges = [];
+            var sedges_pos = 0;
+            for(var i = 0; i < edges.length; ++i){
+                var edge = edges[i];
+                if(edge.length < 3*r)
+                    continue;
+
+                var arSize = ~~(edge.length/r);
+                var arX = new Array(arSize);
+                var arY = new Array(arSize);
+
+                var sedge_pos = 0;
+                var cX = 0;
+                var cY = 0;
+                var collected = 0;
+                for(var k = 0; k < edge.length; ++k) {
+                    cX += edge.x[k];
+                    cY += edge.y[k];
+                    ++collected;
+                    if (collected == r) {
+                        arX[sedge_pos] = cX / r;
+                        arY[sedge_pos] = cY / r;
+                        ++sedge_pos;
+                        cX = 0;
+                        cY = 0;
+                        collected = 0;
+                    }
+                }
+                sedges[sedges_pos++] = {x:arX, y:arY, length:arSize};
+            }
+            return sedges;
+        }
+
         function init() {
             new Canvas("image").loadImg("test.jpg").onImageLoaded = function() {
                 var canvas = this;
@@ -435,7 +469,7 @@
 
                 newImgData = canny.hysteresis(newImgData, parseInt(document.getElementById("d").value))();
 
-                var edges = createFragments(canny.getAllEdges(newImgData), canvas.width);
+                var edges = smoothFragments(createFragments(canny.getAllEdges(newImgData), canvas.width), 8);
 
                 for(var i = 0; i < edges.length; ++i){
                     var edge = edges[i];
