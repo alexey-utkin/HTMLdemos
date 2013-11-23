@@ -490,6 +490,48 @@
             return sedges;
         }
 
+        function splitByRadiusFragments(edges, dist) {
+            var sedges = [];
+            var sedges_pos = 0;
+            for(var i = 0; i < edges.length; ++i){
+                var edge = edges[i];
+
+                var arX = [edge.x[0]];
+                var arY = [edge.y[0]];
+                var sedge_pos = 1;
+                for(var k = 1; k < edge.length; ++k) {
+                    var sdist2 = sqr(edge.x[k] - edge.x[k-1]) + sqr(edge.y[k] - edge.y[k-1]);
+                    if (sdist2 >= dist2) {
+                        if (sedge_pos > 3)
+                           sedges[sedges_pos++] = {x:arX, y:arY, length:sedge_pos};
+                        sedge_pos = 0;
+                        arX = [];
+                        arY = [];
+                    }
+                    arX[sedge_pos] = edge.x[k];
+                    arY[sedge_pos] = edge.y[k];
+                    ++sedge_pos;
+                }
+                if (sedge_pos >= 3)
+                    sedges[sedges_pos++] = {x:arX, y:arY, length:sedge_pos};
+            }
+            return sedges;
+        }
+
+        function drawEdges(edges, canvas) {
+            var colors = ["#F00", "#FF0", "#F0F", "#0FF"];
+            for(var i = 0; i < edges.length; ++i){
+                var edge = edges[i];
+                canvas.ctx.strokeStyle = colors[i % colors.length];
+                canvas.ctx.beginPath();
+                canvas.ctx.moveTo(edge.x[0], edge.y[0]);
+                for(var k = 1; k < edge.length; ++k) {
+                  canvas.ctx.lineTo(edge.x[k], edge.y[k]);
+                }
+                canvas.ctx.stroke();
+            }
+        }
+
         function init() {
             new Canvas("image").loadImg("test.jpg").onImageLoaded = function() {
                 var canvas = this;
@@ -506,21 +548,7 @@
                             createFragments(canny.getAllEdges(newImgData), canvas.width),
                             8),
                         10);
-                var colors = ["#F00", "#FF0", "#F0F", "#0FF"];
-                for(var i = 0; i < edges.length; ++i){
-                    var edge = edges[i];
-                    canvas.ctx.strokeStyle = colors[i % colors.length];
-                      /*"rgb("
-                      + (55 + ~~(Math.random()*200)) + ","
-                      + (55 + ~~(Math.random()*200)) + ","
-                      + (55 + ~~(Math.random()*200)) + ")"*/;
-                    canvas.ctx.beginPath();
-                    canvas.ctx.moveTo(edge.x[0], edge.y[0]);
-                    for(var k = 1; k < edge.length; ++k) {
-                      canvas.ctx.lineTo(edge.x[k], edge.y[k]);
-                    }
-                    canvas.ctx.stroke();
-                }
+                drawEdges(edges, canvas);
                 //canvas.ctx.putImageData(newImgData, 0, 0);
             };
         }
