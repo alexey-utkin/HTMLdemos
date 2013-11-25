@@ -13,6 +13,7 @@
         function max(a, b) { return a > b ? a : b; }
         function ss(x1, y1, x2, y2) { return x1*x2 + y1*y2; }
         function module(x, y) { return Math.sqrt(x*x + y*y); }
+        function module2(x, y) { return x*x + y*y; }
         function rotS(edge, i) {
             var DY1 = edge.y[i] - edge.y[i - 1];
             var DX1 = edge.x[i] - edge.x[i - 1];
@@ -620,21 +621,126 @@
              if (s.r > Rmax)
                 break;
            }
-           console.log(++ic + 'x:' + s.x + ' y:' + s.y + ' r:' + s.r);
+
+           s.x = ~~s.x;
+           s.y = ~~s.y;
+           s.r = ~~s.r;
+
            return s;
         }
 
-        function drawAsCircle(edges, canvas) {
-            var colors = ["#F00", "#FF0", "#F0F", "#0FF"];
+        function checkColor(c, imgData) {
+            if (c==false)
+              return c;
+
+            var cRed = 0;
+            var cGreen = 0;
+            var cBlue = 0;
+            var r2 = sqr(c.r);
+            var lineSize = imgData.width*4;
+            var minX = max(0, c.x - c.r - 1);
+            var maxX = min(imgData.width, c.x + c.r + 1);
+            var minY = max(0, c.y - c.r - 1);
+            var maxY = min(imgData.height, c.y + c.r + 1);
+            var data = imgData.data;
+
+            var index = new Array(sqr(2*(c.r + 1)));
+            var pointCount = 0;
+            for (var x = minX; x < maxX; ++x) {
+                for (var y = minY; y < maxY; ++y)  if ( module2(x - c.x, y - c.y) < r2 ) {
+                    var offset = lineSize*y + x*4;
+                    index[pointCount++] = offset;
+                    cRed += data[offset];
+                    cGreen += data[++offset];
+                    cBlue += data[++offset];
+                }
+            }
+            if (pointCount > 0) {
+                cRed /= pointCount;
+                cGreen /= pointCount;
+                cBlue /= pointCount;
+            }
+            c.color = "rgba(" + (~~cRed) + "," + (~~cGreen) + "," + (~~cBlue) + ", 0.99)";
+
+            var error = 0;
+            for (var i = 0; i < pointCount; ++i) {
+                var offset = index[i];
+                var dr =  data[offset]   - cRed;
+                var dg =  data[++offset] - cGreen;
+                var db =  data[++offset] - cBlue;
+                error += Math.sqrt(sqr(dr) + sqr(dg) + sqr(db));
+            }
+            c.error = error;
+            c.errorU = error/pointCount;
+
+            console.log(++ic + 'x:' + c.x + ' y:' + c.y + ' r:' + c.r + ' c:' + c.errorU);
+            return c;
+        }
+
+        //heap
+        function heap_check(ar, heap_size, i, key)
+        {
+           if (i < heap_size) {
+              var max = i;
+              var left = 2*i + 1;
+              var right = 2*(i + 1);
+              if (left < heap_size && key(ar[left]) > key(ar[max]))
+                  max = left;
+              if (right < heap_size && key(ar[right]) > key(ar[max]))
+                  max = right;
+
+              if (max != i) {
+                  var temp = ar[i];
+                  ar[i] = ar[max];
+                  ar[max] = temp;
+                  heap_check(ar, heap_size, max, key);
+              }
+           }
+        }
+
+        function heap_build(ar, count, key)
+        {
+            for (var i = Math.floor(count/2); i >=0; --i) {
+                heap_check(ar, count, i, key);
+            }
+        }
+
+        function heap_sort(ar, count, key) //O(n * ln(n))
+        {
+           heap_build(ar, count, key);
+           for (var i = count - 1; i >= 0; --i) {
+              var max = ar[0];
+              ar[0] = ar[i];
+              ar[i] = max;
+              heap_check(ar, i, 0, key);
+           }
+        }
+
+
+        function drawAsCircle(edges, canvas, imgData) {
+            var circles = new Array(edges.length);
+            var circleCount = 0;
             for(var i = 0; i < edges.length; ++i){
                 var edge = edges[i];
                 var circle = getCircle(edge.x, edge.y, canvas);
                 if (circle) {
-                    canvas.ctx.strokeStyle = colors[i % colors.length];
+                    circles[circleCount++] = checkColor(circle, imgData)
+                }
+            }
+
+            heap_sort(circles, circleCount, function(circle) { return 1/circle.error; } );
+            var colors = ["#F00", "#FF0", "#F0F", "#0FF"];
+            for(var i = 0; i < circleCount; ++i) {
+                var circle = circles[i];
+                if (circle.errorU < 50) {
                     canvas.ctx.beginPath();
-                    canvas.ctx.arc(circle.x, circle.y, circle.r, 0, 2*Math.PI);
+                    canvas.ctx.arc(circle.x, circle.y, circle.r, 0, 2*Math.PI, false);
+                    canvas.ctx.fillStyle = 0;//circle.color;
+                    canvas.ctx.fill();
+                    canvas.ctx.strokeStyle = canvas.ctx.fillStyle;
+                    //canvas.ctx.strokeStyle = colors[i % colors.length];
                     canvas.ctx.stroke();
-               }
+                }
             }
         }
 
@@ -642,13 +748,18 @@
         function init() {
             //new Canvas("image").loadImg("pettern1.png").onImageLoaded = function() {
             new Canvas("image").loadImg("test.jpg").onImageLoaded = function() {
+            //new Canvas("image").loadImg("test2.jpg").onImageLoaded = function() {
                 var canvas = this;
                 var canny = new Canny(this);
-                var currentImgData = canvas.ctx.getImageData(0, 0, canvas.elem.width, canvas.elem.height);
-                currentImgData = canny.grayscale(currentImgData);
-                var newImgData = canny.nonMaximumSuppress(canny.sobel(currentImgData));
-
-                newImgData = canny.hysteresis(newImgData, parseInt(document.getElementById("d").value))();
+                var currentImgData = canvas.ctx.getImageData(0, 0, canvas.width, canvas.height);
+                var newImgData =
+                    canny.hysteresis(
+                        canny.nonMaximumSuppress(
+                            canny.sobel(
+                                canny.grayscale(currentImgData)
+                            )
+                        )
+                    , parseInt(document.getElementById("d").value))();
 
                 var edges =
                     splitByRotFragments(
@@ -659,8 +770,8 @@
                         , 8)
                     )
                     ;
-                drawEdges(edges, canvas);
-                drawAsCircle(edges, canvas);
+                //drawEdges(edges, canvas);
+                drawAsCircle(edges, canvas, currentImgData);
                 //canvas.ctx.putImageData(newImgData, 0, 0);
             };
         }
