@@ -66,13 +66,20 @@
             var that = this;
             var usrImg = new Image();
             usrImg.onload = function() {
+                var maxSize = 8000;
+                var maxISize = max(usrImg.width, usrImg.height);
+                if (maxISize > maxSize) {
+                    usrImg.width = ~~(usrImg.width * maxSize/maxISize);
+                    usrImg.height = ~~(usrImg.height * maxSize/maxISize);
+                }
+
                 if (usrImg.width !== that.width || usrImg.height !== that.height) {
                     that.width = usrImg.width;
                     that.height = usrImg.height;
                     that.elem.width = that.width;
                     that.elem.height = that.height;
                 }
-                that.ctx.drawImage(usrImg, sx || 0, sy || 0);
+                that.ctx.drawImage(usrImg, sx || 0, sy || 0, usrImg.width, usrImg.height);
                 that.currentImg.imgData = that.ctx.getImageData(0, 0, that.elem.width, that.elem.height);
                 if (that.onImageLoaded) {
                     that.onImageLoaded();
@@ -639,7 +646,7 @@
             var minY = max(0, c.y - c.r - 1);
             var maxY = min(imgData.height, c.y + c.r + 1);
             var data = imgData.data;
-
+            
             var index = new Array(sqr(2*(c.r + 1)));
             var pointCount = 0;
             for (var x = minX; x < maxX; ++x) {
@@ -671,6 +678,34 @@
 
             console.log(++ic + 'x:' + c.x + ' y:' + c.y + ' r:' + c.r + ' c:' + c.errorU);
             return c;
+        }
+
+        function getFillColor(imgData) {
+            var cRed = 0;
+            var cGreen = 0;
+            var cBlue = 0;
+            var data = imgData.data;            
+
+            for (var offset = 0; offset < data.length; offset+=4) {
+                cRed   +=  data[offset];
+                cGreen +=  data[offset + 1];
+                cBlue  +=  data[offset + 2];
+            }
+            
+            var norm = Math.sqrt(3*sqr(127))/Math.sqrt(sqr(cRed) + sqr(cGreen) + sqr(cBlue));
+/* 
+            if (data.length > 0) {
+                cRed /= data.length;
+                cGreen /= data.length;
+                cBlue /= data.length;
+            }
+*/  
+            if (data.length > 0) {
+                cRed *= norm;
+                cGreen *= norm;
+                cBlue *= norm;
+            }
+            return "rgb(" + (~~cRed) + "," + (~~cGreen) + "," + (~~cBlue) + ")";
         }
 
         //heap
@@ -760,27 +795,28 @@
                         smoothFragments(
                             splitByJumpsFragments(
                                     createFragments(canny.getAllEdges(newImgData), canvas.width)
-                            , 16)
-                        , 8)
+                            ,16)
+                        ,8)
                     );
                 var circles =  getBestCircles(edges, currentImgData);
 
                 canvas.ctx.beginPath();
-                canvas.ctx.fillStyle = "gray";
+                canvas.ctx.fillStyle = getFillColor(currentImgData);
                 canvas.ctx.fillRect(0,0,canvas.width,canvas.height);
 
                 drawCircles(circles, canvas, null);
 
-                //img.src = document.getElementById('image').toDataURL("image/jpg");
+                document.getElementById('imageD').src = document.getElementById('image').toDataURL("image/png");
             };
         }
 -->
 </script>
 </head>
 <body onload="init();">
-<img id="imageS" src="test4.jpg"/>
+<img id="imageS" src="lena4.jpg"/>
 <canvas id="image">
 </canvas>
+<img id="imageD"/>
 <input id="d" type="number" value="90"/><button onclick="init()">Redraw</button>
 <div id="data"></div>
 </body>
